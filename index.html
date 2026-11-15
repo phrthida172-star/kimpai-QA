@@ -1,0 +1,58 @@
+const SHEET_NAME = "NC_Records";
+function doGet(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) { sheet = setupSheet(ss); }
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return ContentService.createTextOutput(JSON.stringify([]))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  const headers = data[0];
+  const rows = data.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((h, i) => {
+      if (h === 'date' && row[i] instanceof Date) {
+        obj[h] = Utilities.formatDate(row[i], "Asia/Bangkok", "yyyy-MM-dd");
+      } else {
+        obj[h] = row[i];
+      }
+    });
+    return obj;
+  });
+  return ContentService.createTextOutput(JSON.stringify(rows))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function doPost(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) { sheet = setupSheet(ss); }
+  const payload = JSON.parse(e.postData.contents);
+  if (payload.action === "updateStatus") {
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(payload.id)) {
+        sheet.getRange(i + 1, 14).setValue(payload.status);
+        break;
+      }
+    }
+    return ContentService.createTextOutput(JSON.stringify({ status: "updated" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  sheet.appendRow([
+    payload.id || Date.now(), payload.date, payload.shift, payload.dept,
+    payload.machine, payload.jobNo, payload.customer, payload.defect,
+    payload.qty, payload.unit, payload.operator, payload.reporter,
+    payload.cause, payload.status, new Date()
+  ]);
+  return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+function setupSheet(ss) {
+  const sheet = ss.insertSheet(SHEET_NAME);
+  const headers = ["id", "date", "shift", "dept", "machine", "jobNo", "customer", "defect", "qty", "unit", "operator", "reporter", "cause", "status", "timestamp"];
+  sheet.appendRow(headers);
+  sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#FCE7F3");
+  sheet.setFrozenRows(1);
+  return sheet;
+}
